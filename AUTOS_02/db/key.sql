@@ -1,0 +1,2 @@
+SELECT fabricante
+FROM automoveis;
