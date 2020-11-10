@@ -1,1 +1,0 @@
-select fabricante from automoveis;
