@@ -1,0 +1,5 @@
+echo 
+echo 1
+echo 512
+echo 10
+exit 0
