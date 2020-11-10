@@ -134,8 +134,6 @@ echo "Read database credentials..."
 source zip_src/db/db.conf
 #echo zip_src/db/db.conf
 
-echo "TODO: CREATE temporary table and user here?"
-
 echo "Query syntax is correct!"
 ret=0
 

@@ -116,6 +116,11 @@ echo "##################"
 echo "RUNNING QUERIES..."
 echo "##################"
 
+# Use aliases for useful commands
+clean_database_file=../zip_src/utils/clean_database.sh
+chmod a+x $clean_database_file
+clean_database=./$clean_database_file
+
 dbclient=`which mysql`
 [ -x "$dbclient" ] || dbclient=/usr/bin/mysql
 if [ ! -x "$dbclient" ]; then
@@ -127,18 +132,15 @@ echo "Read database credentials..."
 # https://askubuntu.com/questions/367136/how-do-i-read-a-variable-from-a-file
 source ../zip_src/db/db.conf
 
-echo "Read queries (key and proposed solution)..."
-# https://stackoverflow.com/questions/7427262/how-to-read-a-file-into-a-variable-in-shell
+echo "Save path to sql files (key and proposed solution)..."
 key="../zip_src/db/key.sql"
 script="../*.sql"
-echo "$key"
-echo "$script"
 
 echo "# -------------- #"
 echo "# SETUP"
 echo "# -------------- #"
 
-echo "Setting up new database"
+echo "Setting up new database..."
 new_user=`openssl rand -hex 12`
 temp_db=`openssl rand -hex 12`
 new_password=alunopass
@@ -157,7 +159,7 @@ echo "# -------------- #"
 echo "# PREPARE TEMPORARY DATABASE"
 echo "# -------------- #"
 
-echo "> Creating database [$temp_db] with user [$new_user]"
+echo "Creating database [$temp_db] with user [$new_user]..."
 mysql --user=$user --password=$password -h $host -e "CREATE DATABASE $temp_db;
  GRANT ALTER, ALTER ROUTINE, CREATE, CREATE ROUTINE, CREATE TEMPORARY TABLES, DROP, EXECUTE, INSERT, SELECT, UPDATE ON $temp_db.*
  TO $new_user@'%' IDENTIFIED BY '$new_password'"
@@ -166,12 +168,13 @@ mysql --user=$user --password=$password -h $host -e "CREATE DATABASE $temp_db;
 echo "# -------------- #"
 echo "# EXECUTE QUERIES"
 echo "# -------------- #"
+echo "Running student's query..."
 # https://stackoverflow.com/questions/9558867/how-to-fetch-field-from-mysql-query-result-in-bash
 student_result=$($dbclient --defaults-extra-file=$student_conf -s -N < $script 2>&1)
 echo $student_result
 
 # Check result from student's query and return if necessary
-echo "Checking the results (student)"
+echo "Checking the results (student)..."
 if [ -z "$student_result" ]; then
   echo "The script was executed successfully"
 else
@@ -181,7 +184,7 @@ else
   # We need to save the output in case the results do not match
   echo $student_result > ../runit.retcode
 
-  #Todo clean the database and other data (put in another file?)
+  $clean_database
 
   if [ -f stdout0 ]; then
     cat stdout0
@@ -191,18 +194,16 @@ else
 fi
 
 
-echo "Run professor's query..."
+echo "Running professor's query..."
 professor_result=$($dbclient --defaults-extra-file=$professor_conf -sN < $key 2>&1)
-echo "Ran prof query. Result:"
 echo $professor_result
-echo -e "\n\n"
 
-echo -e "\n> Removing student's user"
-mysql --user=$user --password=$password -h $host -e "DROP USER '$new_user'@'%';"
-# TODO Remove temporary database
+$clean_database "$new_user" "$temp_db"
 
-
-echo "Checking the results (professor)"
+echo "# -------------- #"
+echo "# CHECKS"
+echo "# -------------- #"
+echo "Checking the results (professor)..."
 if [ -z "$professor_result" ]; then
   echo "All checks ran successfully!"
   ret=0
