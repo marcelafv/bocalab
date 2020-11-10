@@ -163,7 +163,9 @@ mysql --user=$user --password=$password -h $host -e "CREATE DATABASE $temp_db;
  TO $new_user@'%' IDENTIFIED BY '$new_password'"
 
 
-echo "Run and compare queries..."
+echo "# -------------- #"
+echo "# EXECUTE QUERIES"
+echo "# -------------- #"
 # https://stackoverflow.com/questions/9558867/how-to-fetch-field-from-mysql-query-result-in-bash
 student_result=$($dbclient --defaults-extra-file=$student_conf -s -N < $script 2>&1)
 echo $student_result
@@ -179,6 +181,8 @@ else
   # We need to save the output in case the results do not match
   echo $student_result > ../runit.retcode
 
+  #Todo clean the database and other data (put in another file?)
+
   if [ -f stdout0 ]; then
     cat stdout0
   fi
@@ -188,8 +192,9 @@ fi
 
 
 echo "Run professor's query..."
-result2=$($dbclient --defaults-extra-file=$professor_conf -sN < $key 2>&1)
-echo "Ran prof query. Result:" + $result2
+professor_result=$($dbclient --defaults-extra-file=$professor_conf -sN < $key 2>&1)
+echo "Ran prof query. Result:"
+echo $professor_result
 echo -e "\n\n"
 
 echo -e "\n> Removing student's user"
@@ -198,18 +203,18 @@ mysql --user=$user --password=$password -h $host -e "DROP USER '$new_user'@'%';"
 
 
 echo "Checking the results (professor)"
-if [ -z "$result2" ]; then
+if [ -z "$professor_result" ]; then
   echo "All checks ran successfully!"
   ret=0
+  professor_result=1
 else
   echo "There was something wrong while running the checks"
-  #ret=2
   ret=0
-  result2=1
+  professor_result=0
 fi
 
 # We need to save the output in case the results do not match
-echo $result2 > ../runit.retcode
+echo $professor_result > ../runit.retcode
 
 if [ -f stdout0 ]; then
   cat stdout0
