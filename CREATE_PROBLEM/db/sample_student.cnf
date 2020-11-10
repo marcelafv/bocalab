@@ -1,6 +1,4 @@
-#!/bin/bash
-
-# Basic setup
+[client]
 host=bocamysql
 port=3306
 user=otheruser

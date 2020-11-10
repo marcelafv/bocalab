@@ -1,0 +1,6 @@
+[client]
+user=temporaryuser
+password=alunopass
+host=bocamysql
+port=3306
+database=temporarydb
