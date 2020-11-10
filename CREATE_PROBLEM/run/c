@@ -1,0 +1,225 @@
+#!/bin/bash
+# ////////////////////////////////////////////////////////////////////////////////
+# //BOCA Online Contest Administrator
+# //    Copyright (C) 2003-2014 by BOCA System (bocasystem@gmail.com)
+# //
+# //    This program is free software: you can redistribute it and/or modify
+# //    it under the terms of the GNU General Public License as published by
+# //    the Free Software Foundation, either version 3 of the License, or
+# //    (at your option) any later version.
+# //
+# //    This program is distributed in the hope that it will be useful,
+# //    but WITHOUT ANY WARRANTY; without even the implied warranty of
+# //    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# //    GNU General Public License for more details.
+# //    You should have received a copy of the GNU General Public License
+# //    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# ////////////////////////////////////////////////////////////////////////////////
+#Last modified: 21/aug/2014 by cassio@ime.usp.br
+#
+# parameters are:
+# $1 exe_file
+# $2 input_file
+# $3 timelimit (limit to run all the repetitions, by default only one repetition)
+# $4 number_of_repetitions_to_run (optional, can be used for better tuning the timelimit)
+# $5 maximum allowed memory (in MBytes)
+# $6 maximum allowed output size (in KBytes)
+#
+# the output of the submission should be directed to the standard output
+#
+# the return code show what happened (according to safeexec):
+# 0 ok
+# 1 compile error
+# 2 runtime error
+# 3 timelimit exceeded
+# 4 internal error
+# 5 parameter error
+# 6 internal error
+# 7 memory limit exceeded
+# 8 security threat
+# 9 runtime error
+# other_codes are unknown to boca: in this case BOCA will present the
+#                                  last line of standard output to the judge
+
+umask 0022
+id -u bocajail >/dev/null 2>/dev/null
+if [ $? == 0 ]; then
+	bocau=`id -u bocajail`
+	bocag=`id -g bocajail`
+	chown bocajail.nogroup .
+else
+	bocau=`id -u nobody`
+	bocag=`id -g nobody`
+	chown nobody.nogroup .
+fi
+if [ "$bocau" == "" -o "$bocag" == "" ]; then
+	echo "error finding user to run script"
+	exit 43
+fi
+
+# this script makes use of safeexec to execute the code with less privilegies
+# make sure that directories below are correct.
+sf=`which safeexec`
+[ -x "$sf" ] || sf=/usr/bin/safeexec
+
+if [ "$1" == "" -o "$2" == "" -o "$3" == "" ]; then
+    echo "parameter problem"
+    exit 43
+fi
+#if [ ! -x "$1" ]; then
+#    echo "$1 not found (or is not in the current dir) or it's not executable"
+#    exit 44
+#fi
+if [ ! -r "$2" ]; then
+    echo "$2 not found (or is not in the current dir) or it's not readable"
+    exit 45
+fi
+if [ ! -x "$sf" ]; then
+    echo "$sf not found or it's not executable"
+    exit 46
+fi
+
+time=$3
+if [ "$time" -gt "0" ]; then
+  let "ttime = $time + 30"
+else
+  time=1
+  ttime=30
+fi
+
+nruns=1
+if [ "$4" != "" ]; then
+  if [ "$4" -gt "0" ]; then
+    nruns=$4
+  fi
+fi
+maxm=512000
+if [ "$5" != "" ]; then
+  if [ "$5" -gt "0" ]; then
+    maxm=${5}000
+  fi
+fi
+maxf=1024
+if [ "$6" != "" ]; then
+  if [ "$6" -gt "0" ]; then
+    maxf=${6}
+  fi
+fi
+
+############################################################
+# Last modified: november/2020 by Marcela
+# Use this convention:
+# Runtime error = there is a problem with the student's script
+# Compile error = there is a problem with the professor's script
+
+echo "##################"
+echo "RUNNING QUERIES..."
+echo "##################"
+
+dbclient=`which mysql`
+[ -x "$dbclient" ] || dbclient=/usr/bin/mysql
+if [ ! -x "$dbclient" ]; then
+    echo "$dbclient not found or it's not executable"
+    exit 47
+fi
+
+echo "Read database credentials..."
+# https://askubuntu.com/questions/367136/how-do-i-read-a-variable-from-a-file
+source ../zip_src/db/db.conf
+
+echo "Read queries (key and proposed solution)..."
+# https://stackoverflow.com/questions/7427262/how-to-read-a-file-into-a-variable-in-shell
+key="../zip_src/db/key.sql"
+script="../*.sql"
+echo "$key"
+echo "$script"
+
+echo "# -------------- #"
+echo "# SETUP"
+echo "# -------------- #"
+
+echo "Setting up new database"
+new_user=`openssl rand -hex 12`
+temp_db=`openssl rand -hex 12`
+new_password=alunopass
+professor_conf=professor.cnf
+student_conf=student.cnf
+
+# Suppress the "mysql: [Warning] Using a password on the command line interface can be insecure." warning
+# We need to call the mysql command with a ".cnf" file instead of passing the credentials directly in the command
+# https://stackoverflow.com/questions/20751352/suppress-warning-messages-using-mysql-from-within-terminal-but-password-written/22513843#comment42372603_22933056
+echo "Creating professor's conf file"
+echo -e "[client]\nuser=$user\npassword=$password\nhost=$host\nport=$port\ndatabase=$temp_db" > $professor_conf
+echo "Creating student's conf file"
+echo -e "[client]\nuser=$new_user\npassword=$new_password\nhost=$host\nport=$port\ndatabase=$temp_db" > $student_conf
+
+echo "# -------------- #"
+echo "# PREPARE TEMPORARY DATABASE"
+echo "# -------------- #"
+
+echo "> Creating database [$temp_db] with user [$new_user]"
+mysql --user=$user --password=$password -h $host -e "CREATE DATABASE $temp_db;
+ GRANT ALTER, ALTER ROUTINE, CREATE, CREATE ROUTINE, CREATE TEMPORARY TABLES, DROP, EXECUTE, INSERT, SELECT, UPDATE ON $temp_db.*
+ TO $new_user@'%' IDENTIFIED BY '$new_password'"
+
+
+echo "Run and compare queries..."
+# https://stackoverflow.com/questions/9558867/how-to-fetch-field-from-mysql-query-result-in-bash
+student_result=$($dbclient --defaults-extra-file=$student_conf -s -N < $script 2>&1)
+echo $student_result
+
+# Check result from student's query and return if necessary
+echo "Checking the results (student)"
+if [ -z "$student_result" ]; then
+  echo "The script was executed successfully"
+else
+  echo "There was something wrong while running the script"
+  ret=1
+
+  # We need to save the output in case the results do not match
+  echo $student_result > ../runit.retcode
+
+  if [ -f stdout0 ]; then
+    cat stdout0
+  fi
+
+  exit $ret
+fi
+
+
+echo "Run professor's query..."
+result2=$($dbclient --defaults-extra-file=$professor_conf -sN < $key 2>&1)
+echo "Ran prof query. Result:" + $result2
+echo -e "\n\n"
+
+echo -e "\n> Removing student's user"
+mysql --user=$user --password=$password -h $host -e "DROP USER '$new_user'@'%';"
+# TODO Remove temporary database
+
+
+echo "Checking the results (professor)"
+if [ -z "$result2" ]; then
+  echo "All checks ran successfully!"
+  ret=0
+else
+  echo "There was something wrong while running the checks"
+  #ret=2
+  ret=0
+  result2=1
+fi
+
+# We need to save the output in case the results do not match
+echo $result2 > ../runit.retcode
+
+if [ -f stdout0 ]; then
+  cat stdout0
+fi
+
+exit $ret
+
+# Time limit exceeded
+#exit 3
+# Security threat
+#exit 8
+
+############################################################

@@ -7,7 +7,7 @@ services:
     image: registry.gitlab.com/rlaiola/boca-db:mysql
 #    https://stackoverflow.com/questions/44884719/exited-with-code-0-docker/55907197:
     tty: true
-    #command: --privileged
+    #command:
     #restart: always
     ports:
       - 80:80
