@@ -43,9 +43,9 @@ if [ -r runit.retcode ]; then
 fi
 
 if [ "$ret" == "0" ]; then
-  echo "Query results do NOT match!"
+  echo "The solution is not correct."
   exit 6
 else
-  echo "Query results match!"
+  echo "Well done!"
   exit 4
 fi
