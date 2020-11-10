@@ -184,7 +184,7 @@ else
   # We need to save the output in case the results do not match
   echo $student_result > ../runit.retcode
 
-  $clean_database
+  $clean_database "$new_user" "$temp_db" "$dbclient" "$professor_conf"
 
   if [ -f stdout0 ]; then
     cat stdout0
@@ -198,7 +198,7 @@ echo "Running professor's query..."
 professor_result=$($dbclient --defaults-extra-file=$professor_conf -sN < $key 2>&1)
 echo $professor_result
 
-$clean_database "$new_user" "$temp_db"
+$clean_database "$new_user" "$temp_db" "$dbclient" "$professor_conf"
 
 echo "# -------------- #"
 echo "# CHECKS"
